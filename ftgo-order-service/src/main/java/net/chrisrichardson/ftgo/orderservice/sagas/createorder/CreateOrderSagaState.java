@@ -64,6 +64,7 @@ public class CreateOrderSagaState {
   }
 
   CreateTicket makeCreateTicketCommand() {
+    logger.info("3. kitchen service create ticket, set state kitchenService.create");
     return new CreateTicket(getOrderDetails().getRestaurantId(), getOrderId(), makeTicketDetails(getOrderDetails()));
   }
 
@@ -86,14 +87,17 @@ public class CreateOrderSagaState {
   }
 
   CancelCreateTicket makeCancelCreateTicketCommand() {
+    logger.error("create cancel ticket , set state kitchenService.cancel");
     return new CancelCreateTicket(getOrderId());
   }
 
   RejectOrderCommand makeRejectOrderCommand() {
+    logger.warn("order status rejected, initiate reject order");
     return new RejectOrderCommand(getOrderId());
   }
 
   ValidateOrderByConsumer makeValidateOrderByConsumerCommand() {
+    logger.info("2. validate order by consumer");
     ValidateOrderByConsumer x = new ValidateOrderByConsumer();
     x.setConsumerId(getOrderDetails().getConsumerId());
     x.setOrderId(getOrderId());
@@ -102,14 +106,18 @@ public class CreateOrderSagaState {
   }
 
   AuthorizeCommand makeAuthorizeCommand() {
-    return new AuthorizeCommand().withConsumerId(getOrderDetails().getConsumerId()).withOrderId(getOrderId()).withOrderTotal(getOrderDetails().getOrderTotal().asString());
+    logger.info("4. accounting authorize order, set state accountingService.authorize");
+    return new AuthorizeCommand().withConsumerId(getOrderDetails().getConsumerId()).withOrderId(getOrderId())
+        .withOrderTotal(getOrderDetails().getOrderTotal().asString());
   }
 
   ApproveOrderCommand makeApproveOrderCommand() {
+    logger.info("6. Order approved and create order success");
     return new ApproveOrderCommand(getOrderId());
   }
 
   ConfirmCreateTicket makeConfirmCreateTicketCommand() {
+    logger.info("5. Kitchen confirmed ticket ,set state kitchenService.confirmCreate");
     return new ConfirmCreateTicket(getTicketId());
 
   }
