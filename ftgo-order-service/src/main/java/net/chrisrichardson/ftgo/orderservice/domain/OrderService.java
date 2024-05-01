@@ -86,8 +86,8 @@ public class OrderService {
     OrderDetails orderDetails = new OrderDetails(consumerId, restaurantId, orderLineItems, order.getOrderTotal());
 
     CreateOrderSagaState data = new CreateOrderSagaState(order.getId(), orderDetails);
-    sagaInstanceFactory.create(createOrderSaga, data);
     logger.info("saga order initated");
+    sagaInstanceFactory.create(createOrderSaga, data);
     meterRegistry.ifPresent(mr -> mr.counter("placed_orders").increment());
     logger.info("order created and queued");
 
