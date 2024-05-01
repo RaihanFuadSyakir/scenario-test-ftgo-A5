@@ -27,7 +27,7 @@ import static java.util.stream.Collectors.toList;
 
 public class OrderService {
 
-  private java.util.logging.Logger logger = LoggerFactory.getLogger(getClass());
+  private Logger logger = LoggerFactory.getLogger(getClass());
 
   private SagaInstanceFactory sagaInstanceFactory;
 
@@ -189,7 +189,7 @@ public class OrderService {
   }
 
   public void createMenu(long id, String name, List<MenuItem> menuItems) {
-    logger.info("create new menu at restaurant '{}", name);
+    logger.info("create new menu at restaurant '{}'", name);
     Restaurant restaurant = new Restaurant(id, name, menuItems);
     restaurantRepository.save(restaurant);
   }
