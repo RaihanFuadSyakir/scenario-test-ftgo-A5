@@ -112,7 +112,7 @@ public class CreateOrderSagaState {
   }
 
   ApproveOrderCommand makeApproveOrderCommand() {
-    logger.info("6. Order approved and create order success");
+    logger.info("6. Order approved and create order success" + getOrderId().toString());
     return new ApproveOrderCommand(getOrderId());
   }
 
