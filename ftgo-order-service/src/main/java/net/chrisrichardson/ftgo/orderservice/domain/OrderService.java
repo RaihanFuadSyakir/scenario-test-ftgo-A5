@@ -46,14 +46,14 @@ public class OrderService {
   private Optional<MeterRegistry> meterRegistry;
 
   public OrderService(SagaInstanceFactory sagaInstanceFactory,
-                      OrderRepository orderRepository,
-                      DomainEventPublisher eventPublisher,
-                      RestaurantRepository restaurantRepository,
-                      CreateOrderSaga createOrderSaga,
-                      CancelOrderSaga cancelOrderSaga,
-                      ReviseOrderSaga reviseOrderSaga,
-                      OrderDomainEventPublisher orderAggregateEventPublisher,
-                      Optional<MeterRegistry> meterRegistry) {
+      OrderRepository orderRepository,
+      DomainEventPublisher eventPublisher,
+      RestaurantRepository restaurantRepository,
+      CreateOrderSaga createOrderSaga,
+      CancelOrderSaga cancelOrderSaga,
+      ReviseOrderSaga reviseOrderSaga,
+      OrderDomainEventPublisher orderAggregateEventPublisher,
+      Optional<MeterRegistry> meterRegistry) {
 
     this.sagaInstanceFactory = sagaInstanceFactory;
     this.orderRepository = orderRepository;
@@ -67,14 +67,16 @@ public class OrderService {
 
   @Transactional
   public Order createOrder(long consumerId, long restaurantId, DeliveryInformation deliveryInformation,
-                           List<MenuItemIdAndQuantity> lineItems) {
+      List<MenuItemIdAndQuantity> lineItems) {
+
+    logger.debug("order process initiated");
     Restaurant restaurant = restaurantRepository.findById(restaurantId)
-            .orElseThrow(() -> new RestaurantNotFoundException(restaurantId));
+        .orElseThrow(() -> new RestaurantNotFoundException(restaurantId));
 
     List<OrderLineItem> orderLineItems = makeOrderLineItems(lineItems, restaurant);
 
-    ResultWithDomainEvents<Order, OrderDomainEvent> orderAndEvents =
-            Order.createOrder(consumerId, restaurant, deliveryInformation, orderLineItems);
+    ResultWithDomainEvents<Order, OrderDomainEvent> orderAndEvents = Order.createOrder(consumerId, restaurant,
+        deliveryInformation, orderLineItems);
 
     Order order = orderAndEvents.result;
     orderRepository.save(order);
@@ -84,21 +86,21 @@ public class OrderService {
     OrderDetails orderDetails = new OrderDetails(consumerId, restaurantId, orderLineItems, order.getOrderTotal());
 
     CreateOrderSagaState data = new CreateOrderSagaState(order.getId(), orderDetails);
+    logger.info("saga order initated");
     sagaInstanceFactory.create(createOrderSaga, data);
-
     meterRegistry.ifPresent(mr -> mr.counter("placed_orders").increment());
+    logger.info("order created and queued");
 
     return order;
   }
 
-
   private List<OrderLineItem> makeOrderLineItems(List<MenuItemIdAndQuantity> lineItems, Restaurant restaurant) {
     return lineItems.stream().map(li -> {
-      MenuItem om = restaurant.findMenuItem(li.getMenuItemId()).orElseThrow(() -> new InvalidMenuItemIdException(li.getMenuItemId()));
+      MenuItem om = restaurant.findMenuItem(li.getMenuItemId())
+          .orElseThrow(() -> new InvalidMenuItemIdException(li.getMenuItemId()));
       return new OrderLineItem(li.getMenuItemId(), om.getName(), om.getPrice(), li.getQuantity());
     }).collect(toList());
   }
-
 
   public Optional<Order> confirmChangeLineItemQuantity(Long orderId, OrderRevision orderRevision) {
     return orderRepository.findById(orderId).map(order -> {
@@ -114,14 +116,17 @@ public class OrderService {
 
   @Transactional
   public Order cancel(Long orderId) {
+    logger.info("cancel order initiated");
     Order order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new OrderNotFoundException(orderId));
+        .orElseThrow(() -> new OrderNotFoundException(orderId));
     CancelOrderSagaData sagaData = new CancelOrderSagaData(order.getConsumerId(), orderId, order.getOrderTotal());
     sagaInstanceFactory.create(cancelOrderSaga, sagaData);
+    logger.info("cancel order saga initiated");
     return order;
   }
 
   private Order updateOrder(long orderId, Function<Order, List<OrderDomainEvent>> updater) {
+    logger.info("update order initiated");
     return orderRepository.findById(orderId).map(order -> {
       orderAggregateEventPublisher.publish(order, updater.apply(order));
       return order;
@@ -129,29 +134,35 @@ public class OrderService {
   }
 
   public void approveOrder(long orderId) {
+    logger.info("order approved");
     updateOrder(orderId, Order::noteApproved);
     meterRegistry.ifPresent(mr -> mr.counter("approved_orders").increment());
   }
 
   public void rejectOrder(long orderId) {
+    logger.info("order rejected");
     updateOrder(orderId, Order::noteRejected);
     meterRegistry.ifPresent(mr -> mr.counter("rejected_orders").increment());
   }
 
   public void beginCancel(long orderId) {
+    logger.info("cancel order started");
     updateOrder(orderId, Order::cancel);
   }
 
   public void undoCancel(long orderId) {
+    logger.info("cancel order cancelled");
     updateOrder(orderId, Order::undoPendingCancel);
   }
 
   public void confirmCancelled(long orderId) {
+    logger.info("cancel order confirmed");
     updateOrder(orderId, Order::noteCancelled);
   }
 
   @Transactional
   public Order reviseOrder(long orderId, OrderRevision orderRevision) {
+    logger.info("revise order initiated");
     Order order = orderRepository.findById(orderId).orElseThrow(() -> new OrderNotFoundException(orderId));
     ReviseOrderSagaData sagaData = new ReviseOrderSagaData(order.getConsumerId(), orderId, null, orderRevision);
     sagaInstanceFactory.create(reviseOrderSaga, sagaData);
@@ -159,6 +170,7 @@ public class OrderService {
   }
 
   public Optional<RevisedOrder> beginReviseOrder(long orderId, OrderRevision revision) {
+    logger.info("revise order started");
     return orderRepository.findById(orderId).map(order -> {
       ResultWithDomainEvents<LineItemQuantityChange, OrderDomainEvent> result = order.revise(revision);
       orderAggregateEventPublisher.publish(order, result.events);
@@ -167,19 +179,23 @@ public class OrderService {
   }
 
   public void undoPendingRevision(long orderId) {
+    logger.info("pending revision cancelled");
     updateOrder(orderId, Order::rejectRevision);
   }
 
   public void confirmRevision(long orderId, OrderRevision revision) {
+    logger.info("revise order confirmed");
     updateOrder(orderId, order -> order.confirmRevision(revision));
   }
 
   public void createMenu(long id, String name, List<MenuItem> menuItems) {
+    logger.info("create new menu at restaurant '{}'", name);
     Restaurant restaurant = new Restaurant(id, name, menuItems);
     restaurantRepository.save(restaurant);
   }
 
   public void reviseMenu(long id, List<MenuItem> menuItems) {
+    logger.info("revise menu initiated");
     restaurantRepository.findById(id).map(restaurant -> {
       List<OrderDomainEvent> events = restaurant.reviseMenu(menuItems);
       return restaurant;
