@@ -30,19 +30,19 @@ public class ReviseOrderSaga implements SimpleSaga<ReviseOrderSagaData> {
   @PostConstruct
   public void initializeSagaDefinition() {
     sagaDefinition = step()
-            .invokeParticipant(this::beginReviseOrder)
-            .onReply(BeginReviseOrderReply.class, this::handleBeginReviseOrderReply)
-            .withCompensation(this::undoBeginReviseOrder)
-            .step()
-            .invokeParticipant(this::beginReviseTicket)
-            .withCompensation(this::undoBeginReviseTicket)
-            .step()
-            .invokeParticipant(this::reviseAuthorization)
-            .step()
-            .invokeParticipant(this::confirmTicketRevision)
-            .step()
-            .invokeParticipant(this::confirmOrderRevision)
-            .build();
+        .invokeParticipant(this::beginReviseOrder)
+        .onReply(BeginReviseOrderReply.class, this::handleBeginReviseOrderReply)
+        .withCompensation(this::undoBeginReviseOrder)
+        .step()
+        .invokeParticipant(this::beginReviseTicket)
+        .withCompensation(this::undoBeginReviseTicket)
+        .step()
+        .invokeParticipant(this::reviseAuthorization)
+        .step()
+        .invokeParticipant(this::confirmTicketRevision)
+        .step()
+        .invokeParticipant(this::confirmOrderRevision)
+        .build();
   }
 
   private void handleBeginReviseOrderReply(ReviseOrderSagaData data, BeginReviseOrderReply reply) {
@@ -56,53 +56,60 @@ public class ReviseOrderSaga implements SimpleSaga<ReviseOrderSagaData> {
   }
 
   private CommandWithDestination confirmOrderRevision(ReviseOrderSagaData data) {
+    logger.warn("Order " + data.getOrderId() + " revise order confirmed at" + OrderServiceChannels.COMMAND_CHANNEL);
     return send(new ConfirmReviseOrderCommand(data.getOrderId(), data.getOrderRevision()))
-            .to(OrderServiceChannels.COMMAND_CHANNEL)
-            .build();
+        .to(OrderServiceChannels.COMMAND_CHANNEL)
+        .build();
 
   }
 
   private CommandWithDestination confirmTicketRevision(ReviseOrderSagaData data) {
-    return send(new ConfirmReviseTicketCommand(data.getRestaurantId(), data.getOrderId(), data.getOrderRevision().getRevisedOrderLineItems()))
-            .to(KitchenServiceChannels.COMMAND_CHANNEL)
-            .build();
+    logger.warn("Order " + data.getOrderId() + "  revise ticket confirmed at" + KitchenServiceChannels.COMMAND_CHANNEL);
+    return send(new ConfirmReviseTicketCommand(data.getRestaurantId(), data.getOrderId(),
+        data.getOrderRevision().getRevisedOrderLineItems()))
+        .to(KitchenServiceChannels.COMMAND_CHANNEL)
+        .build();
 
   }
 
   private CommandWithDestination reviseAuthorization(ReviseOrderSagaData data) {
+    logger.warn("Order " + data.getOrderId() + " begin revise authorize at"
+        + AccountingServiceChannels.accountingServiceChannel);
     return send(new ReviseAuthorization(data.getConsumerId(), data.getOrderId(), data.getRevisedOrderTotal()))
-            .to(AccountingServiceChannels.accountingServiceChannel)
-            .build();
+        .to(AccountingServiceChannels.accountingServiceChannel)
+        .build();
 
   }
 
   private CommandWithDestination undoBeginReviseTicket(ReviseOrderSagaData data) {
+    logger.error("Order " + data.getOrderId() + " undo revise ticket at" + KitchenServiceChannels.COMMAND_CHANNEL);
     return send(new UndoBeginReviseTicketCommand(data.getRestaurantId(), data.getOrderId()))
-            .to(KitchenServiceChannels.COMMAND_CHANNEL)
-            .build();
+        .to(KitchenServiceChannels.COMMAND_CHANNEL)
+        .build();
 
   }
 
   private CommandWithDestination beginReviseTicket(ReviseOrderSagaData data) {
-    return send(new BeginReviseTicketCommand(data.getRestaurantId(), data.getOrderId(), data.getOrderRevision().getRevisedOrderLineItems()))
-            .to(KitchenServiceChannels.COMMAND_CHANNEL)
-            .build();
+    logger.warn("Order " + data.getOrderId() + " begin revise ticket at" + KitchenServiceChannels.COMMAND_CHANNEL);
+    return send(new BeginReviseTicketCommand(data.getRestaurantId(), data.getOrderId(),
+        data.getOrderRevision().getRevisedOrderLineItems()))
+        .to(KitchenServiceChannels.COMMAND_CHANNEL)
+        .build();
 
   }
 
   private CommandWithDestination undoBeginReviseOrder(ReviseOrderSagaData data) {
     return send(new UndoBeginReviseOrderCommand(data.getOrderId()))
-            .to(OrderServiceChannels.COMMAND_CHANNEL)
-            .build();
+        .to(OrderServiceChannels.COMMAND_CHANNEL)
+        .build();
   }
 
   private CommandWithDestination beginReviseOrder(ReviseOrderSagaData data) {
+    logger.warn("Order " + data.getOrderId() + " begin revise order at" + OrderServiceChannels.COMMAND_CHANNEL);
     return send(new BeginReviseOrderCommand(data.getOrderId(), data.getOrderRevision()))
-            .to(OrderServiceChannels.COMMAND_CHANNEL)
-            .build();
+        .to(OrderServiceChannels.COMMAND_CHANNEL)
+        .build();
 
   }
-
-
 
 }
